@@ -57,3 +57,6 @@ data/cache/
 *.bak
 quick_test.csv
 quick_repo_test.csv
+
+# Thesis PDF/LaTeX — kept locally but not in public repo
+thesis/
