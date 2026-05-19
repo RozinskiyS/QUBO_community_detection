@@ -19,9 +19,10 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-RES_DIR = os.path.join(HERE, 'results')
-FIG_DIR = os.path.join(HERE, 'figures')
-CACHE_DIR = os.path.join(HERE, 'data', 'cache')
+REPO_ROOT = os.path.dirname(HERE)
+RES_DIR = os.path.join(REPO_ROOT, 'results')
+FIG_DIR = os.path.join(REPO_ROOT, 'figures')
+CACHE_DIR = os.path.join(REPO_ROOT, 'data', 'cache')
 
 
 # Bigger fonts for A4 print rendering.

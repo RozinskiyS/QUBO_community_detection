@@ -19,9 +19,10 @@ import matplotlib as mpl
 from matplotlib.colors import LinearSegmentedColormap, Normalize
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)
-RES_DIR = os.path.join(HERE, 'results')
-FIG_DIR = os.path.join(HERE, 'figures')
+REPO_ROOT = os.path.dirname(HERE)
+sys.path.insert(0, os.path.join(REPO_ROOT, 'src'))
+RES_DIR = os.path.join(REPO_ROOT, 'results')
+FIG_DIR = os.path.join(REPO_ROOT, 'figures')
 os.makedirs(FIG_DIR, exist_ok=True)
 
 # Publication-quality defaults
