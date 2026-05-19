@@ -1,0 +1,218 @@
+% =============================================================================
+% Chapter 1: Introduction (3-4 pages)
+% =============================================================================
+
+\section{Introduction}
+\label{sec:introduction}
+
+\subsection{Motivation}
+\label{sec:motivation}
+
+Many graphs of interest exhibit community structure: their vertices
+form groups that are more densely connected internally than to the
+rest of the graph. Examples include friendship circles in social
+networks, functional protein complexes in biological systems, and
+clusters of behaviorally similar customers in financial networks.
+Recovering this structure from the graph alone, without external
+labels, is the problem of \emph{community
+detection}~\cite{fortunato2010community}, with applications across
+network science and, more recently, in anti-fraud
+analytics~\cite{wang2024quantum}.
+
+The dominant practical approach is to maximize Newman's
+modularity~\cite{newman2006modularity} through local greedy search,
+as in the Louvain~\cite{blondel2008louvain} and
+Leiden~\cite{traag2019leiden} algorithms. These methods are fast and
+deliver high-quality partitions on graphs of millions of vertices.
+However, they are local heuristics: they do not in general find the
+global modularity optimum, and they suffer from the \emph{resolution
+limit}~\cite{fortunato2007resolution}, which prevents them from
+detecting small communities embedded in larger graphs. These
+limitations motivate the search for alternative approaches.
+
+One alternative formulates modularity maximization as a Quadratic
+Unconstrained Binary Optimization (QUBO)
+problem~\cite{lucas2014ising}. The partition is then a vector of
+binary variables, and modularity is a quadratic form over those
+variables. The problem itself remains NP-hard, but the QUBO
+formulation opens it to a different class of solvers: classical
+local search~\cite{ushijima2017graph}, quantum
+annealing~\cite{negre2020detecting}, and Coherent Ising
+Machines~\cite{wang2024quantum}. Wang et
+al.~\cite{wang2024quantum} recently demonstrated this last approach
+on real banking data, but their method depends on specialized analog
+hardware that is not widely available.
+
+A different line of work, due to Schuetz et
+al.~\cite{schuetz2022combinatorial}, replaces the dedicated hardware
+with an unsupervised graph neural network. Their Physics-Inspired
+GNN (PI-GNN) parameterizes the binary assignment vector through a
+continuous relaxation and trains the GNN to minimize the relaxed
+QUBO loss on a single GPU, without any labeled data. The QIGNN
+framework~\cite{qignn2026} extends PI-GNN with iterative refinement:
+the prediction of one training epoch is concatenated with the input
+features of the next, allowing the network to revisit and improve
+its earlier output. Both PI-GNN and QIGNN have so far been validated
+on bipartite combinatorial problems --- MaxCut and Maximum
+Independent Set --- where each variable is a single binary
+indicator.
+
+The community detection problem is bipartite only in the special
+case of two communities. With $k > 2$ communities each vertex must
+be assigned a one-hot vector of length $k$, the QUBO matrix grows
+from $n \times n$ to $nk \times nk$, and the one-hot constraint
+needs to be enforced through a penalty term in the loss. Whether
+the QIGNN approach extends cleanly to this setting is the question
+this thesis sets out to answer. The investigation produces both an
+extension of the QIGNN framework to the multi-class case and, where
+the multi-class formulation runs into difficulties, a hierarchical
+algorithm that recovers competitive performance by recursively
+applying the more reliable bipartition formulation.
+
+
+\subsection{Problem statement}
+\label{sec:problem_statement}
+
+Let $G = (V, E)$ be an undirected graph with $|V| = n$ vertices and
+$|E| = m$ edges. A \emph{community structure} on $G$ is a partition
+of the vertex set into $k$ disjoint, non-empty subsets, encoded as
+a function $C: V \to \{1, \ldots, k\}$ that assigns each vertex a
+community label. The community detection problem asks for the
+partition that best reflects the underlying structure of the graph,
+where ``best'' is measured by a quality function on partitions.
+
+Newman's modularity~\cite{newman2006modularity} is the quality
+function adopted throughout this thesis. It is defined as
+\begin{equation}
+    M(C) = \frac{1}{2m} \sum_{v, w \in V}
+    \left( A_{vw} - \frac{k_v k_w}{2m} \right)
+    \delta(C_v, C_w),
+    \label{eq:modularity_intro}
+\end{equation}
+where $A_{vw}$ is the adjacency matrix entry between vertices $v$
+and $w$, $k_v = \sum_w A_{vw}$ is the degree of vertex $v$, and
+$\delta$ is the Kronecker delta. The optimization problem is then
+$C^* = \arg\max_{C} M(C)$.
+
+Modularity maximization is NP-hard~\cite{brandes2008modularity}, so
+exact solution is infeasible at any practical scale and approximate
+methods are required. This thesis assumes that the number of
+communities $k$ is given as part of the input. Determining $k$
+automatically is its own line of research, and fixing it lets the
+focus stay on the optimization itself.
+
+
+\subsection{Approach overview}
+\label{sec:approach_overview}
+
+The approach combines a QUBO formulation of the modularity objective
+with an unsupervised graph neural network as the solver. Given a
+graph $G$ and a target number of communities $k$, the procedure has
+three steps: (i) construct a QUBO matrix $\Q$ that encodes the
+modularity objective; (ii) train a GNN whose output, after softmax
+normalization, parameterizes a relaxed solution $\Pb(\theta) \in
+[0,1]^{n \times k}$; (iii) recover a discrete partition by taking
+$\arg\max$ along the community dimension of $\Pb$. The GNN is
+trained from scratch on the input graph by minimizing the relaxed
+QUBO loss $\Lcal(\theta) = \pb_{\mathrm{flat}}^T \, \Q \,
+\pb_{\mathrm{flat}}$. No labeled data is used.
+
+For the QUBO construction the formulations of Wang et
+al.~\cite{wang2024quantum} are used. The bipartition formulation
+($k=2$) encodes community membership through a single binary
+variable per vertex and reduces to the quadratic form $\xb^T (-\B)
+\xb$, where $\B$ is the modularity matrix. The multi-class
+formulation ($k > 2$) introduces $nk$ binary variables under a
+one-hot encoding constraint, which is enforced softly through a
+quadratic penalty term. Both formulations are implemented in this
+work.
+
+For the neural solver the QIGNN framework~\cite{qignn2026} is used
+as the starting point. QIGNN combines GraphSAGE convolutional
+blocks with iterative refinement of the previous epoch's prediction.
+The architecture is adapted to multi-class output by replacing the
+sigmoid head with a softmax layer over $k$ classes. To make the
+multi-class loss tractable on graphs of practical size, a
+memory-efficient training procedure is developed that computes the
+loss directly from the modularity matrix and the probability matrix
+without ever materializing the full $nk \times nk$ QUBO matrix.
+
+The multi-class loss has a degenerate global minimum at the trivial
+all-in-one assignment, where every vertex is placed into the same
+community. An orthogonality regularization adapted from
+DMoN~\cite{tsitsulin2020graph} is integrated to discourage this
+collapse by penalizing overlap between community columns. Its
+behavior is evaluated empirically on graphs with both balanced and
+imbalanced community structures.
+
+Training uses the Adam optimizer with a time-dependent annealing
+penalty that pushes the relaxed solution toward the corners of the
+hypercube as training progresses. A schematic of the architecture
+and training loop is given in Section~\ref{sec:methodology}.
+
+
+\subsection{Scientific novelty}
+\label{sec:novelty}
+
+The scientific novelty of this thesis is summarized in the
+following points.
+
+\begin{enumerate}
+    \item \textbf{A hierarchical decomposition algorithm for
+    multi-class community detection.} A new algorithm is proposed
+    that recursively applies the stable bipartition QUBO
+    formulation through QIGNN to recover community structure for
+    arbitrary $k$, using modularity gain as the natural stopping
+    criterion. To the best of the author's knowledge, this is the
+    first work to combine QUBO-based neural solvers with
+    hierarchical graph decomposition for community detection. The
+    hierarchical method matches Louvain in modularity within $0.02$
+    on every benchmark in the study, including graphs with up to
+    forty-two ground-truth communities, while matching or exceeding
+    Louvain in normalized mutual information on ten of thirteen
+    benchmarks (eight strict wins plus two ties at the perfect
+    NMI of $1.0$). The modularity-gain stopping criterion
+    automatically discovers the number of communities, recovering
+    Louvain's choice of $k$ on graphs where Louvain's heuristic
+    is itself reliable.
+
+    \item \textbf{Extension of the QIGNN framework to multi-class
+    community detection.} The QIGNN
+    framework~\cite{qignn2026} and its predecessor
+    PI-GNN~\cite{schuetz2022combinatorial} have so far been
+    validated only on bipartite problems such as MaxCut and Maximum
+    Independent Set. To the best of the author's knowledge, this
+    thesis is the first to apply the QIGNN paradigm to community
+    detection with arbitrary $k$. The extension involves a softmax
+    output layer over $k$ classes and the linearization of one-hot
+    encoded QUBO variables.
+
+    \item \textbf{Empirical demonstration that the bipartition
+    formulation of QIGNN matches or exceeds Louvain in agreement
+    with ground-truth community structure.} On diverse binary
+    community detection benchmarks the unsupervised QIGNN-based
+    solver reaches normalized mutual information at or above
+    Louvain's. This result has not, to the author's knowledge,
+    been previously reported.
+
+    \item \textbf{Memory-efficient training procedure for the
+    multi-class QUBO loss.} The proposed implementation computes
+    the QUBO loss directly from the modularity matrix and the
+    probability matrix, without materializing the full QUBO
+    matrix. This reduces memory complexity from quadratic to
+    linear in the linearized problem size and makes training
+    feasible on graphs that the original PI-GNN and QIGNN
+    implementations cannot handle.
+
+    \item \textbf{Analysis of orthogonality regularization in the
+    QUBO setting.} The orthogonality regularization originates in
+    the supervised DMoN method~\cite{tsitsulin2020graph}; its
+    behavior in the unsupervised QUBO setting has not previously
+    been studied. A systematic empirical comparison across diverse
+    graph structures is provided, identifying when the
+    regularization helps and when its built-in balance prior
+    actively harms performance on imbalanced graphs.
+\end{enumerate}
+
+
+\newpage

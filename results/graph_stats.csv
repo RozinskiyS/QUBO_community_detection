@@ -1,0 +1,8 @@
+,n,m,k_true,avg_deg,min_size,med_size,max_size,connected
+karate,34,78,2,4.588235294117647,17,17,17,True
+football,115,613,12,10.660869565217391,5,10,13,True
+polbooks,105,441,3,8.4,13,43,49,True
+lfr_n200_mu0.1,200,1036,5,10.36,23,39,62,True
+lfr_n200_mu0.3,200,1151,6,11.51,22,27,54,True
+lfr_n500_mu0.3,500,2880,11,11.52,22,42,83,True
+email_eu_core,986,16064,42,32.5841784989858,1,14,107,True

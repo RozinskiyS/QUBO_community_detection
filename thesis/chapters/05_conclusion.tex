@@ -1,0 +1,203 @@
+% =============================================================================
+% Chapter 5: Discussion and Conclusion (3-4 pages)
+% =============================================================================
+
+% =============================================================================
+% Chapter 5: Discussion and Conclusion (3-4 pages)
+% =============================================================================
+
+\section{Discussion and Conclusion}
+\label{sec:conclusion}
+
+\subsection{Summary of findings}
+\label{sec:summary}
+
+This thesis investigated the application of the QIGNN framework to
+community detection through QUBO formulations of modularity
+maximization. The investigation produced three main empirical
+findings, summarized below.
+
+\paragraph{The bipartition formulation matches Louvain on binary
+benchmarks.} The QUBO formulation for $k=2$
+(equation~\eqref{eq:qubo_k2}) reduces to a quadratic form on the
+modularity matrix and contains no constraint penalties. Trained
+through QIGNN, this formulation converges deterministically across
+all seven binary benchmarks tested, including a graph with
+$n = 1\,222$ vertices. Modularity is within $0.03$ of Louvain on
+average, and normalized mutual information with the ground truth
+exceeds Louvain on five of the seven benchmarks, with improvements
+up to~$0.33$ on the Dolphins network.
+
+\paragraph{The multi-class formulation has structural limitations.}
+The QUBO formulation for $k > 2$ (equation~\eqref{eq:qubo_multi})
+introduces $nk$ binary variables under one-hot constraints
+enforced through a soft penalty. Empirically, this loss landscape
+is heavily influenced by the trivial all-in-one assignment:
+training collapses to it on between $10\%$ and $85\%$ of runs
+across benchmarks, depending on $k$ and graph size. Orthogonality
+regularization suppresses the collapse but introduces a
+balance prior that conflicts with the natural structure of
+imbalanced real-world graphs, reducing modularity below the
+unregularized baseline on Polbooks (drop from $0.46$ to $0.06$)
+and on Email-EU-core (drop from $0.08$ to $0.001$). Hyperparameter
+tuning does not close the gap to Louvain on any benchmark; the
+gap is structural rather than calibration-related.
+
+\paragraph{The hierarchical algorithm recovers the multi-class
+case.} Recursive application of the bipartition formulation, with
+modularity gain as the stopping criterion, produces a method that
+matches Louvain in modularity within $0.019$ on every benchmark
+in the study, including Email-EU-core
+($n = 986$, $k_{\mathrm{true}} = 42$). Taking the best of the
+three stopping criteria for each graph, the algorithm matches or
+exceeds Louvain in NMI on \textbf{ten of thirteen benchmarks}
+(eight strict wins and two ties at perfect NMI of $1.0$); the
+remaining three losses are all on LFR graphs with low mixing,
+where Louvain itself already attains NMI close to $1.0$. The
+largest NMI gains over Louvain are on imbalanced graphs:
+$+0.236$ on Polbooks-binary, $+0.094$ on Email-EU-core, and
+$+0.083$ on Karate. The algorithm is empirically deterministic,
+inheriting this property from the bipartition formulation: the
+standard deviation of modularity across random seeds is below
+$10^{-4}$ on ten of thirteen benchmarks and at most $0.005$ on
+the remaining three, two orders of magnitude lower than the
+multi-class formulation. The modularity-gain criterion
+automatically discovers the number of communities, recovering
+Louvain's choice of $k$ on graphs where Louvain's heuristic is
+itself reliable.
+
+\medskip
+
+Two further results support the main findings. The
+memory-efficient training procedure developed in
+Section~\ref{sec:method_efficient} reduces the QUBO loss memory
+from $O(n^2 k^2)$ to $O(n^2 + nk)$ (a factor-of-$k^2$
+improvement), lowering the cost on Email-EU-core from
+approximately~$6.9$~GB to approximately~$4$~MB and making the
+multi-class experiments feasible on commodity hardware. The empirical analysis of Section~\ref{sec:exp_applicability}
+characterizes the regime in which the methods are competitive:
+the bipartition formulation works at any tested graph size for
+binary tasks, and the hierarchical algorithm works at any tested
+combination of $n$ and $k$, while the direct multi-class
+formulation is structurally limited and is not recommended.
+
+
+\subsection{Limitations}
+\label{sec:limitations}
+
+The methods developed in this thesis have several limitations
+that should temper expectations.
+
+\paragraph{Runtime.} The QIGNN-based methods run between three
+and five orders of magnitude slower than Louvain. On
+Email-EU-core, Louvain completes in~$0.06$ seconds while the
+hierarchical algorithm requires approximately fifteen minutes.
+This is the cost of training a neural network from scratch for
+each (sub)graph, and it makes the methods unsuitable for
+latency-sensitive applications. The runtime is a property of the
+method's architecture and is unlikely to be reduced by
+implementation tuning alone; sparse graph operations and
+GPU acceleration would help, but a structural runtime gap to
+Louvain would remain.
+
+\paragraph{Modularity gap on the multi-class formulation.} Even
+with regularization and multistart, the direct multi-class
+formulation does not match Louvain in modularity on any
+benchmark. The hierarchical algorithm bypasses this limitation,
+but anyone wishing to apply the multi-class formulation directly
+should be aware that the optimization is structurally limited.
+
+\paragraph{Required prior $k$.} The bipartition formulation
+applies only to $k=2$. The hierarchical algorithm with
+modularity-gain criterion automatically determines $k$, but the
+target-$k$ variant requires $k_{\mathrm{true}}$ as input.
+Determining $k$ automatically when the modularity-gain criterion
+is unsuitable (for instance on graphs where the modularity-optimal
+partition has fewer communities than the ground truth) is left
+as future work.
+
+\paragraph{Single graph training.} Each application of the
+methods requires training a GNN from scratch. The methods do not
+benefit from any transfer of learned features across graphs. A
+GNN trained on a corpus of graphs and applied at inference time
+would amortize the training cost across many predictions; this
+direction is consistent with the supervised methods of
+Tsitsulin et al.~\cite{tsitsulin2020graph}, but it requires
+labeled training data, which the present unsupervised setting
+deliberately avoids.
+
+\paragraph{Modularity as the only objective.} The methods
+optimize modularity, which has known
+limitations~\cite{fortunato2007resolution, good2010performance}.
+Alternative quality functions such as normalized cut or
+description-length objectives could be incorporated by adapting
+the QUBO formulation, but this is outside the scope of the
+thesis.
+
+
+\subsection{Future work}
+\label{sec:future}
+
+The results of this thesis suggest several directions for further
+research.
+
+\paragraph{Larger graphs.} The hierarchical algorithm has been
+tested up to $n = 1\,222$. Scaling to graphs of $10^4$ vertices
+or more requires sparse graph operations and GPU acceleration of
+the GNN training step. The structured-loss reformulation
+already removes the memory bottleneck; the runtime bottleneck is
+the per-bipartition training, which can be partially addressed by
+GPU support and by sharing initialization across consecutive
+splits.
+
+\paragraph{Warm starts and refinement.} Louvain finds a partition
+in milliseconds. A natural hybrid is to use Louvain's output as a
+warm start for the hierarchical algorithm, refining only the
+splits where Louvain's modularity gain was small. This combines
+Louvain's speed with the hierarchical algorithm's higher
+agreement with ground truth, and is consistent with the
+observation that the two methods reach different local optima of
+the modularity landscape.
+
+\paragraph{Hardware QUBO solvers.} Section~\ref{sec:rw_hardware}
+mentioned that the QUBO formulations of Wang et
+al.~\cite{wang2024quantum} were originally solved on Coherent
+Ising Machines. The structural QUBO matrices produced by the
+formulations of this thesis can be directly fed to such hardware,
+allowing a comparison of neural and hardware solvers on the same
+problems. This comparison would clarify the practical trade-offs
+between the two paradigms in the regime where both are
+applicable.
+
+
+\subsection{Concluding remarks}
+\label{sec:final}
+
+The original question of this thesis was whether the QIGNN
+paradigm, validated on bipartite combinatorial problems such as
+MaxCut and Maximum Independent Set, could be effectively applied
+to the multi-class setting of community detection. The empirical
+answer is twofold. The direct multi-class formulation,
+constructed by the natural extension of the bipartite QUBO,
+exhibits structural limitations: trivial collapse, sensitivity
+to community balance, and a modularity gap to classical
+heuristics that hyperparameter tuning cannot close. The
+indirect approach, in which the bipartition formulation is
+applied recursively, recovers the multi-class case and produces
+a method that is competitive with Louvain in modularity and
+typically superior to it in agreement with ground-truth
+community structure.
+
+The connection drawn in this work between QUBO-based community
+detection (previously studied for quantum hardware) and
+unsupervised neural solvers establishes a path toward scalable
+community detection on commodity computing infrastructure. While
+the methods proposed do not displace Louvain in
+latency-sensitive settings, they offer a complementary tool for
+applications where the quality of the partition matters more than
+the speed of its computation, and they open a productive avenue
+for combining QUBO-based formulations with neural network
+solvers in the broader context of combinatorial optimization on
+graphs.
+
+\newpage

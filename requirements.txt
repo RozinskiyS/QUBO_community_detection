@@ -1,0 +1,16 @@
+# Pinned to the versions actually used to produce the results in this repo.
+# Python 3.12 (tested on 3.12.11).
+
+torch==2.2.2
+dgl==2.2.0
+networkx==3.5
+numpy==1.26.4
+pandas==2.2.3
+scikit-learn==1.8.0
+matplotlib>=3.7
+seaborn>=0.13
+tqdm>=4.65
+
+# Notebook execution (optional, only for re-running notebooks)
+jupyter>=1.0
+ipykernel>=6.25

@@ -1,0 +1,706 @@
+% =============================================================================
+% Chapter 3: Methodology (8-10 pages)
+% =============================================================================
+
+\section{Methodology}
+\label{sec:methodology}
+
+This chapter presents the technical core of the thesis: the QUBO
+formulations of modularity maximization, the GNN architecture, the
+loss function with regularization, and the training procedure.
+
+% -----------------------------------------------------------------------------
+\subsection{QUBO formulation of modularity}
+\label{sec:method_qubo}
+
+\subsubsection{Newman's modularity}
+\label{sec:method_modularity}
+
+The modularity of a partition $C: V \to \{1, \ldots, k\}$ of an
+undirected graph $G = (V, E)$ is defined~\cite{newman2006modularity}
+as
+\begin{equation}
+    M(C) = \frac{1}{2m} \sum_{v, w \in V} B_{vw} \, \delta(C_v, C_w),
+    \label{eq:modularity}
+\end{equation}
+where $B_{vw} = A_{vw} - k_v k_w / (2m)$ is the entry of the
+\emph{modularity matrix}, $A_{vw}$ is the adjacency matrix entry
+between vertices $v$ and $w$, $k_v = \sum_w A_{vw}$ is the degree of
+vertex $v$, $m = \frac{1}{2}\sum_{v, w} A_{vw}$ is the total number
+of edges, and $\delta$ is the Kronecker delta.
+
+The intuition behind~\eqref{eq:modularity} is straightforward:
+$B_{vw}$ measures the difference between the actual number of edges
+between $v$ and $w$ and the expected number under a random graph
+with the same degree sequence. Modularity $M(C) > 0$ thus indicates
+that the partition groups together vertices that are more densely
+connected than expected by chance, while $M(C) < 0$ suggests an
+``anti-community'' structure. Maximizing $M$ has become the standard
+objective for community detection, both in classical algorithms such
+as Louvain~\cite{blondel2008louvain} and in optimization-based
+formulations~\cite{wang2024quantum}.
+
+A useful property of the modularity matrix that follows directly
+from the definition is
+\begin{equation}
+    \sum_{w \in V} B_{vw} = 0 \quad \text{for all } v \in V,
+    \label{eq:B_row_sum}
+\end{equation}
+which we will use in the QUBO derivation
+(Sections~\ref{sec:method_qubo_k2}
+and~\ref{sec:method_qubo_multi}).
+
+\subsubsection{QUBO general form}
+\label{sec:method_qubo_general}
+
+A Quadratic Unconstrained Binary Optimization problem~\cite{lucas2014ising}
+takes the form
+\begin{equation}
+    \min_{\xb \in \{0,1\}^N} \, \xb^T \Q \xb,
+    \label{eq:qubo_general}
+\end{equation}
+where $\Q \in \mathbb{R}^{N \times N}$ is a symmetric matrix
+encoding both the linear and quadratic interactions among the
+variables. The structure of $\Q$ has a direct combinatorial
+interpretation. Since $x_i^2 = x_i$ for binary variables, the
+diagonal entry $Q_{ii}$ acts as a linear coefficient on $x_i$,
+while the off-diagonal entry $Q_{ij}$ contributes $Q_{ij} x_i x_j$
+to the objective whenever both $x_i$ and $x_j$ are set to one.
+Without loss of generality $\Q$ may be assumed upper-triangular,
+since pairs $(Q_{ij}, Q_{ji})$ can always be combined into a single
+entry $Q_{ij} + Q_{ji}$.
+
+QUBO is NP-hard in general~\cite{lucas2014ising}, and most
+combinatorial optimization problems of practical interest~--~maximum
+cut, graph coloring, set cover, and many others~--~admit a QUBO
+formulation. The same is true for community detection by modularity
+maximization, as developed in the next subsections.
+
+
+\subsubsection{Modularity as QUBO for $k = 2$}
+\label{sec:method_qubo_k2}
+
+For two communities, a single binary variable per vertex suffices.
+Let $x_v = 1$ if vertex $v$ belongs to community A and $x_v = 0$
+if it belongs to community B. The Kronecker delta in the modularity
+expression~\eqref{eq:modularity} can then be rewritten as
+\begin{equation}
+    \delta(C_v, C_w) = x_v x_w + (1 - x_v)(1 - x_w),
+    \label{eq:delta_k2}
+\end{equation}
+since the right-hand side is $1$ when $x_v = x_w$ and $0$ otherwise.
+
+Substituting~\eqref{eq:delta_k2} into~\eqref{eq:modularity} gives,
+after expanding the product,
+\begin{equation*}
+    M(C) = \frac{1}{2m} \sum_{v,w} B_{vw} \bigl( 2 x_v x_w - x_v - x_w
+    + 1 \bigr).
+\end{equation*}
+The terms involving a single $x$ vanish by the row-sum
+property~\eqref{eq:B_row_sum}, since $\sum_w B_{vw} = 0$ implies
+$\sum_{v,w} B_{vw} \, x_v = 0$, and the constant term $\sum_{v,w}
+B_{vw}$ also vanishes. The result is
+\begin{equation}
+    M(C) = \frac{1}{m} \sum_{v,w} B_{vw} \, x_v x_w.
+    \label{eq:modularity_k2_quadratic}
+\end{equation}
+Maximizing $M$ is therefore equivalent to minimizing
+\begin{equation}
+    H_2(\xb) = -\sum_{v,w} B_{vw} \, x_v x_w = \xb^T (-\B) \, \xb,
+    \label{eq:qubo_k2}
+\end{equation}
+which is a QUBO of the form~\eqref{eq:qubo_general} with
+$\Q = -\B$ (up to a positive scaling factor that does not affect
+the optimizer). The problem size is $N = n$, and the formulation
+contains only quadratic terms; no slack variables or constraint
+penalties are needed.
+
+
+\subsubsection{Modularity as QUBO for $k > 2$}
+\label{sec:method_qubo_multi}
+
+When more than two communities are required, a single binary
+variable per vertex no longer suffices. The standard
+remedy~\cite{negre2020detecting, wang2024quantum} is to introduce
+$k$ binary variables per vertex and constrain exactly one of them
+to be active.
+
+\paragraph{One-hot encoding.}
+For each vertex $v$ and community $c \in \{1, \ldots, k\}$, define
+\begin{equation*}
+    x_{v,c} = \begin{cases} 1 & \text{if vertex } v \text{ is
+    assigned to community } c, \\ 0 & \text{otherwise.} \end{cases}
+\end{equation*}
+A valid community assignment satisfies the one-hot constraint
+\begin{equation}
+    \sum_{c=1}^{k} x_{v,c} = 1 \qquad \text{for all } v \in V.
+    \label{eq:one_hot}
+\end{equation}
+The modularity~\eqref{eq:modularity} expressed in these variables
+becomes
+\begin{equation}
+    M(C) = \frac{1}{2m} \sum_{c=1}^{k} \sum_{v,w \in V} B_{vw} \,
+    x_{v,c} x_{w,c},
+    \label{eq:modularity_onehot}
+\end{equation}
+where the inner sum gathers all pairs of vertices assigned to
+community $c$.
+
+\paragraph{Constraint penalty.}
+The QUBO form is by definition unconstrained, so the one-hot
+constraint~\eqref{eq:one_hot} cannot be enforced directly. Instead
+it is incorporated as a soft penalty term~\cite{lucas2014ising}:
+\begin{equation*}
+    P \sum_{v \in V} \left( \sum_{c=1}^{k} x_{v,c} - 1 \right)^2,
+\end{equation*}
+where $P > 0$ is a penalty coefficient chosen large enough to make
+constraint violations more costly than any modularity gain. The
+penalty is zero when the one-hot constraint is satisfied and
+positive otherwise.
+
+\paragraph{Full formulation.}
+Combining the negated modularity with the constraint penalty, the
+QUBO objective for $k$ communities, following formula~5 of Wang et
+al.~\cite{wang2024quantum}, is
+\begin{equation}
+    H_k(\xb) = -\frac{1}{2m} \sum_{c=1}^{k} \sum_{v,w \in V} B_{vw} \,
+    x_{v,c} x_{w,c} \;+\; P \sum_{v \in V} \left(
+    \sum_{c=1}^{k} x_{v,c} - 1 \right)^2.
+    \label{eq:qubo_multi}
+\end{equation}
+
+\paragraph{Linearization.}
+To put~\eqref{eq:qubo_multi} into the standard QUBO
+form~\eqref{eq:qubo_general}, the double index $(v, c)$ is
+linearized into a single index
+\begin{equation}
+    i = (v - 1) \cdot k + c,
+    \label{eq:linearization}
+\end{equation}
+giving a flat vector $\mathbf{y} \in \{0, 1\}^N$ with $N = nk$. The
+quadratic form $\mathbf{y}^T Q \mathbf{y}$ that reproduces~\eqref{eq:qubo_multi}
+has the following block structure. Diagonal entries $Q_{ii}$
+combine the modularity contribution $-B_{vv} / (2m)$ with the
+linear part of the constraint penalty $-P$. Off-diagonal entries
+fall into one of two categories: a \emph{modularity entry}
+$Q_{ij} = -B_{vw} / m$ when indices $i$ and $j$ correspond to
+different vertices but the same community, and a \emph{constraint
+entry} $Q_{ij} = 2P$ when indices $i$ and $j$ correspond to the
+same vertex but different communities. All remaining entries are
+zero. The resulting matrix has size $nk \times nk$ and is
+symmetric.
+
+\paragraph{Choice of $P$.}
+The penalty $P$ must be large enough to enforce the one-hot
+constraint but not so large that the modularity term is dominated
+and the optimization landscape is flattened. In the experiments
+that follow, $P = 1.5 \cdot \max_{v,w} |B_{vw}|$ is used, which
+puts the constraint and modularity terms on comparable scales.
+
+
+\subsubsection{QUBO and Ising equivalence}
+\label{sec:method_qubo_ising}
+
+The QUBO and Ising forms of an optimization problem are equivalent
+under the affine change of variables $s_i = 2 x_i - 1$, which maps
+$x_i \in \{0, 1\}$ to $s_i \in \{-1, +1\}$. Substituting into a
+QUBO objective $\xb^T \Q \xb$ produces an Ising
+Hamiltonian~\cite{lucas2014ising} of the form
+\begin{equation*}
+    H_{\mathrm{Ising}}(\mathbf{s}) = \sum_i h_i s_i + \sum_{i < j} J_{ij}
+    s_i s_j + \mathrm{const},
+\end{equation*}
+where the local fields $h_i$ and couplings $J_{ij}$ are determined
+by the original $\Q$. The two formulations have the same set of
+minimizers up to the affine relabeling, so any solver designed for
+one can be used for the other. This thesis works directly with the
+QUBO form, but the equivalence is invoked when comparing with
+hardware Ising solvers such as those of Wang et
+al.~\cite{wang2024quantum}.
+
+% -----------------------------------------------------------------------------
+\subsection{GNN architecture}
+\label{sec:method_gnn}
+
+The neural component of the proposed method is a graph neural
+network whose output, after softmax normalization, parameterizes
+the relaxed QUBO assignment. The architecture follows the QIGNN
+framework~\cite{qignn2026}, with the multi-class adaptations
+described in Section~\ref{sec:method_ressage}.
+
+\subsubsection{Message passing}
+\label{sec:method_messagepassing}
+
+Graph neural networks operate on graph-structured data by
+maintaining a vector representation $h_v^{(\ell)} \in
+\mathbb{R}^{d_\ell}$ for each vertex $v$ at each layer $\ell$, and
+updating these representations layer by layer through messages
+exchanged with neighboring vertices. The general
+update~\cite{hamilton2017inductive, kipf2017semi} takes the form
+\begin{equation}
+    h_v^{(\ell+1)} = \mathrm{UPDATE}\bigl( h_v^{(\ell)}, \,
+    \mathrm{AGG}(\{h_u^{(\ell)} : u \in \Ncal(v)\}) \bigr),
+    \label{eq:message_passing}
+\end{equation}
+where $\Ncal(v)$ is the set of neighbors of $v$, $\mathrm{AGG}$ is
+a permutation-invariant aggregation function over the neighbors,
+and $\mathrm{UPDATE}$ is a learned transformation that combines the
+aggregated neighbor information with the vertex's own current
+representation. Different choices of $\mathrm{AGG}$ and
+$\mathrm{UPDATE}$ give rise to different GNN architectures.
+
+
+\subsubsection{GraphSAGE}
+\label{sec:method_sage}
+
+The architecture used in this thesis is built from
+GraphSAGE~\cite{hamilton2017inductive} convolutional layers. A
+GraphSAGE layer with aggregator $\mathrm{AGG}$ updates each vertex
+representation through
+\begin{equation}
+    h_v^{(\ell+1)} = \sigma\!\left( W^{(\ell)} \left[
+    h_v^{(\ell)} \,\Vert\, \mathrm{AGG}\bigl( \{ h_u^{(\ell)} : u
+    \in \Ncal(v) \} \bigr) \right] \right),
+    \label{eq:sage_update}
+\end{equation}
+where $\Vert$ denotes vector concatenation, $W^{(\ell)}$ is a
+learned weight matrix, and $\sigma$ is a non-linear activation. The
+two main aggregator choices for $\mathrm{AGG}$ are the mean
+aggregator, which averages the neighbor representations
+componentwise, and the max-pool aggregator, which applies a small
+multilayer perceptron to each neighbor representation and then
+takes the componentwise maximum.
+
+
+\subsubsection{SAGEResBlock with dual aggregation}
+\label{sec:method_resblock}
+
+The basic building block of the QIGNN architecture is the
+\texttt{SAGEResBlock}, which combines two parallel GraphSAGE
+layers with different aggregators followed by a residual addition.
+Given an input representation $h$, the block computes
+\begin{equation}
+    \mathrm{SAGEResBlock}(h) = \mathrm{LeakyReLU}\bigl(
+    \mathrm{BN}_1(\mathrm{SAGE}_{\mathrm{mean}}(h)) +
+    \mathrm{BN}_2(\mathrm{SAGE}_{\mathrm{pool}}(h)) \bigr),
+    \label{eq:resblock}
+\end{equation}
+where $\mathrm{SAGE}_{\mathrm{mean}}$ and
+$\mathrm{SAGE}_{\mathrm{pool}}$ are GraphSAGE layers with mean and
+max-pool aggregators respectively, $\mathrm{BN}_1$ and
+$\mathrm{BN}_2$ are batch normalization layers, and the addition
+is performed elementwise. The motivation for the dual aggregation
+is empirical: the QIGNN authors~\cite{qignn2026} report that
+combining the two aggregators provides a richer neighborhood
+summary than either aggregator alone, improving final solution
+quality on combinatorial benchmarks.
+
+
+\subsubsection{ResSAGE stack}
+\label{sec:method_ressage}
+
+The full network, called \texttt{ResSAGE} after the original
+implementation, consists of one or more \texttt{SAGEResBlock}
+layers followed by a final GraphSAGE layer that produces the output.
+Throughout this thesis a single \texttt{SAGEResBlock} is used,
+followed by dropout and a final layer that maps to the desired
+output dimension. The output dimension and final activation depend
+on the QUBO formulation:
+\begin{itemize}
+    \item For the bipartition formulation~\eqref{eq:qubo_k2}, the
+    final layer outputs a single logit per vertex, followed by a
+    sigmoid activation. The result is a vector $\pb \in [0,1]^n$
+    representing the relaxed assignment to community A.
+
+    \item For the multi-class formulation~\eqref{eq:qubo_multi},
+    the final layer outputs $k$ logits per vertex, followed by a
+    softmax along the community dimension. The result is a matrix
+    $\Pb \in [0,1]^{n \times k}$ whose rows sum to one and represent
+    a relaxed one-hot assignment over $k$ communities.
+\end{itemize}
+The replacement of the sigmoid head with a softmax over $k$ classes
+is one of the architectural adaptations made in this work; the
+original QIGNN architecture supports only bipartite outputs.
+
+
+\subsubsection{Iterative refinement}
+\label{sec:method_iterative}
+
+A distinguishing feature of QIGNN relative to the simpler
+PI-GNN~\cite{schuetz2022combinatorial} is the use of iterative
+refinement during training. At training epoch $t$, the network is
+given two inputs: a static initial vertex feature matrix $h^{(0)}$
+(random embeddings concatenated with PageRank scores) and the
+network's own output from the previous epoch, $h_0^{(t-1)}$. The
+two are concatenated into a single input
+\begin{equation}
+    \tilde{h}^{(t)} = \bigl[ h^{(0)} \,\Vert\, h_0^{(t-1)} \bigr],
+    \label{eq:iterative_input}
+\end{equation}
+which is then passed through the network. On the first epoch, the
+previous output is initialized to zero, $h_0^{(0)} = \mathbf{0}$.
+This feedback mechanism allows the network to revisit and improve
+its earlier predictions rather than re-deriving them from scratch
+at each epoch.
+
+
+% -----------------------------------------------------------------------------
+\subsection{Continuous relaxation and loss function}
+\label{sec:method_loss}
+
+\subsubsection{Continuous relaxation}
+\label{sec:method_relaxation}
+
+Both QUBO formulations developed in
+Section~\ref{sec:method_qubo}~--~the bipartition $\xb^T (-\B) \xb$
+and the multi-class form~\eqref{eq:qubo_multi}~--~minimize a
+quadratic objective over a discrete domain $\{0, 1\}^N$. The
+discrete domain admits no notion of gradient: there is no
+infinitesimal direction in which a binary variable can be moved.
+Direct application of gradient-based optimization is therefore
+impossible.
+
+The standard remedy~\cite{schuetz2022combinatorial, lucas2014ising}
+is continuous relaxation. The discrete domain $\{0, 1\}^N$ is
+replaced by the continuous hypercube $[0, 1]^N$, on which the
+quadratic form $\pb^T \Q \pb$ is a polynomial of $\pb$ and is
+therefore smooth and differentiable. The original discrete vertices
+of the hypercube are still feasible points, but the optimizer is
+allowed to traverse the interior of the cube during training. After
+training, a feasible discrete solution is recovered by rounding,
+discussed in Section~\ref{sec:method_postprocessing}.
+
+The relaxation is exact for linear objectives, whose minimum on a
+hypercube is always attained at a vertex, but in general lossy for
+indefinite quadratic forms such as the QUBO objectives considered
+here. The minimum of the relaxed problem may lie strictly inside
+the hypercube, and rounding to a discrete vertex can introduce a
+gap between the relaxed and discrete optima. The empirical
+evaluation in Chapter~\ref{sec:experiments} measures the size of
+this gap on a range of benchmarks.
+
+
+\subsubsection{Differentiability through the GNN}
+\label{sec:method_differentiability}
+
+In the proposed method the relaxed assignment $\pb$ is not optimized
+directly. Instead it is parameterized by the GNN: $\pb =
+\pb(\theta)$, where $\theta$ are the GNN parameters. The training
+loss is then a function of $\theta$:
+\begin{equation*}
+    \Lcal(\theta) = \pb(\theta)^T \, \Q \, \pb(\theta).
+\end{equation*}
+The loss is differentiable in $\theta$ because each component in
+the chain $\theta \mapsto \pb \mapsto \Lcal$ is differentiable: the
+GNN is a composition of matrix multiplications, additions, and
+elementwise non-linearities (LeakyReLU, sigmoid, softmax), each of
+which has a well-defined derivative; and the quadratic form is
+polynomial in $\pb$. Backpropagation through this composite
+function is performed automatically by the autograd
+machinery~\cite{paszke2019pytorch} and yields the gradient
+$\nabla_\theta \Lcal$ used by the optimizer.
+
+This is the rationale for parameterizing the assignment through a
+GNN rather than optimizing $\pb$ directly. The graph structure is
+implicitly built into the GNN through message passing: vertices
+that are close in the graph share information through their layers
+and tend to receive similar embeddings, and hence similar relaxed
+assignments. Direct gradient descent on $\pb \in \mathbb{R}^N$
+exploits no such structure.
+
+
+\subsubsection{QUBO loss}
+\label{sec:method_qubo_loss}
+
+For the bipartition formulation the loss is
+\begin{equation}
+    \Lcal_{\mathrm{bip}}(\theta) = \pb(\theta)^T \, (-\B) \,
+    \pb(\theta),
+    \label{eq:loss_bipartition}
+\end{equation}
+where $\pb(\theta) \in [0,1]^n$ is the GNN output after sigmoid
+activation.
+
+For the multi-class formulation the GNN produces a probability
+matrix $\Pb(\theta) \in [0,1]^{n \times k}$ after softmax
+normalization. To match the QUBO form~\eqref{eq:qubo_general}, the
+matrix is flattened by the linearization~\eqref{eq:linearization}
+into a vector $\pb_{\mathrm{flat}}(\theta) \in [0,1]^{nk}$, and the
+loss takes the form
+\begin{equation}
+    \Lcal_{\mathrm{QUBO}}(\theta) = \pb_{\mathrm{flat}}(\theta)^T
+    \, \Q \, \pb_{\mathrm{flat}}(\theta).
+    \label{eq:loss_qubo}
+\end{equation}
+
+
+\subsubsection{Annealing penalty}
+\label{sec:method_annealing}
+
+Both losses~\eqref{eq:loss_bipartition} and~\eqref{eq:loss_qubo}
+are augmented with a time-dependent penalty term that pushes the
+relaxed solution toward the corners of the hypercube as training
+progresses~\cite{schuetz2022combinatorial}. The penalty is
+\begin{equation}
+    \Lcal_{\mathrm{anneal}}(\theta, t) = \lambda(t) \sum_{i}
+    \left| p_i (1 - p_i) \right|,
+    \label{eq:loss_anneal}
+\end{equation}
+where $p_i$ ranges over all entries of $\pb$ (or
+$\pb_{\mathrm{flat}}$ in the multi-class case) and the schedule
+$\lambda(t) = t / T_0$ with $T_0 = 10^4$ grows linearly with the
+epoch number $t$. The product $p_i (1 - p_i)$ is maximized at
+$p_i = 0.5$ and zero at $p_i \in \{0, 1\}$, so the penalty
+effectively rewards confident, near-discrete assignments. The
+linear schedule starts the training without bias toward any
+particular point of the hypercube and gradually introduces
+pressure toward the discrete vertices.
+
+
+\subsubsection{Memory-efficient structured loss}
+\label{sec:method_efficient}
+
+Direct evaluation of the multi-class
+loss~\eqref{eq:loss_qubo} as written would require materializing
+the QUBO matrix $\Q \in \mathbb{R}^{nk \times nk}$ in memory. For
+graphs of practical interest this is prohibitive: on the
+Email-EU-core dataset ($n = 986$, $k = 42$), the matrix has
+$N^2 \approx 1.72 \cdot 10^9$ entries, or approximately~$6.9$~GB
+at single precision. A direct implementation is therefore unable
+to handle even moderately large graphs.
+
+The full $\Q$ matrix can be avoided by exploiting the block
+structure described in Section~\ref{sec:method_qubo_multi}.
+The QUBO objective~\eqref{eq:qubo_multi} decomposes into a
+modularity term and a constraint penalty term. The modularity term
+\begin{equation*}
+    -\frac{1}{2m} \sum_{c=1}^{k} \sum_{v,w \in V} B_{vw} \,
+    P_{v,c} P_{w,c}
+\end{equation*}
+sums over pairs $(v, w)$ of vertices that share a community $c$,
+weighted by the modularity matrix entry $B_{vw}$. Pulling the
+sum over $c$ inside, this is exactly the trace of $\Pb^T \B \Pb$:
+\begin{equation}
+    \Lcal_{\mathrm{mod}}(\Pb) = -\frac{1}{2m} \, \mathrm{tr}\bigl(
+    \Pb^T \B \, \Pb \bigr).
+    \label{eq:loss_mod_efficient}
+\end{equation}
+The constraint penalty
+\begin{equation*}
+    P \sum_{v \in V} \left( \sum_{c=1}^{k} P_{v,c} - 1 \right)^2
+\end{equation*}
+can be written compactly as the squared $\ell_2$ norm of the row
+sums of $\Pb$ minus one:
+\begin{equation}
+    \Lcal_{\mathrm{constraint}}(\Pb) = P \, \bigl\| \Pb \mathbf{1}_k
+    - \mathbf{1}_n \bigr\|_2^2,
+    \label{eq:loss_constraint_efficient}
+\end{equation}
+where $\mathbf{1}_k$ and $\mathbf{1}_n$ are vectors of ones of the
+appropriate dimensions. The total multi-class loss is then
+\begin{equation}
+    \Lcal_{\mathrm{QUBO}}(\theta) = \Lcal_{\mathrm{mod}}(\Pb(\theta))
+    + \Lcal_{\mathrm{constraint}}(\Pb(\theta)),
+    \label{eq:loss_total_efficient}
+\end{equation}
+which is mathematically equivalent to~\eqref{eq:loss_qubo}: the
+block structure of $\Q$ described in
+Section~\ref{sec:method_qubo_multi} factors exactly into the
+modularity trace and the constraint norm term, so no constants or
+cross-terms are lost.
+
+The structured form requires only the modularity matrix
+$\B \in \mathbb{R}^{n \times n}$ and the probability matrix
+$\Pb \in \mathbb{R}^{n \times k}$, with no need to materialize $\Q$.
+Memory complexity drops from $O(n^2 k^2)$ to $O(n^2 + nk)$, a
+factor-of-$k^2$ improvement when the modularity term dominates.
+For the Email-EU-core example ($k=42$), this is a reduction from
+approximately~$6.9$~GB to approximately~$4$~MB. Without this
+reformulation, training on graphs with $n \sim 10^3$ and
+$k \sim 10^2$ would not be feasible on commodity hardware. This
+memory-efficient implementation is one of the contributions of
+this thesis.
+
+
+\subsubsection{Output postprocessing}
+\label{sec:method_postprocessing}
+
+Training produces a relaxed assignment $\pb \in [0,1]^n$ for the
+bipartition case or $\Pb \in [0,1]^{n \times k}$ for the multi-class
+case. A discrete partition is recovered by rounding:
+\begin{itemize}
+    \item Bipartition: $C_v = 1$ if $p_v \geq 0.5$ and $C_v = 0$
+    otherwise.
+    \item Multi-class: $C_v = \arg\max_c P_{v,c}$.
+\end{itemize}
+The annealing penalty~\eqref{eq:loss_anneal} ensures that, by the
+end of training, most entries of $\pb$ or $\Pb$ are close to either
+$0$ or $1$, so the rounding step rarely changes the result
+materially.
+
+% -----------------------------------------------------------------------------
+\subsection{Regularization for trivial collapse}
+\label{sec:method_regularization}
+
+\subsubsection{Trivial collapse problem}
+\label{sec:method_collapse_problem}
+
+The multi-class QUBO loss~\eqref{eq:loss_qubo} has a degenerate
+global minimum corresponding to the trivial assignment in which
+every vertex is placed in the same community $c^*$, that is,
+$P_{v,c^*} = 1$ for all $v$ and $P_{v,c} = 0$ for all $c \neq c^*$.
+In this state the modularity contribution
+\begin{equation*}
+    -\frac{1}{2m} \sum_{c=1}^{k} \sum_{v,w} B_{vw} P_{v,c} P_{w,c}
+    = -\frac{1}{2m} \sum_{v,w} B_{vw}
+\end{equation*}
+vanishes by the row-sum property~\eqref{eq:B_row_sum}, and the
+constraint penalty also vanishes since $\sum_c P_{v,c} = 1$ for
+every vertex. The trivial assignment thus achieves a loss of zero
+without recovering any community structure. It is, moreover, a wide
+and easily reachable attractor in the loss landscape, requiring no
+coordinated agreement between vertices and reached as soon as the
+softmax outputs are biased toward any single community. Empirically
+the optimization converges to this attractor in a substantial
+fraction of training runs (Section~\ref{sec:exp_collapse}).
+
+
+\subsubsection{Orthogonality regularization}
+\label{sec:method_ortho}
+
+To discourage trivial collapse, an orthogonality regularization
+adapted from the supervised DMoN method~\cite{tsitsulin2020graph}
+is added to the multi-class loss:
+\begin{equation}
+    \Lcal_{\mathrm{ortho}}(\Pb) = \left\| \frac{\Pb^T \Pb}{\| \Pb^T
+    \Pb \|_F} - \frac{I_k}{\sqrt{k}} \right\|_F^2,
+    \label{eq:loss_ortho}
+\end{equation}
+where $\| \cdot \|_F$ is the Frobenius norm and $I_k$ is the
+$k \times k$ identity matrix. The matrix $\Pb^T \Pb$ collects
+inner products between the community columns of $\Pb$: its
+diagonal entry $(c, c)$ is the squared mass of community $c$, and
+its off-diagonal entry $(c, c')$ measures the overlap of
+communities $c$ and $c'$. The minimum of
+$\Lcal_{\mathrm{ortho}}$ is reached when $\Pb^T \Pb$ is proportional
+to $I_k$, that is, when the community columns are mutually
+orthogonal and of equal magnitude. This rules out trivial
+collapse, which produces a $\Pb^T \Pb$ with mass concentrated in a
+single diagonal entry.
+
+A side effect of this regularization is that it also encourages
+communities to be of approximately equal size, since equal column
+norms appear in the optimal $\Pb^T \Pb$. This is a strong prior
+that aligns with balanced benchmarks but conflicts with the
+natural structure of imbalanced real-world graphs. The empirical
+analysis in Section~\ref{sec:exp_regularization} characterizes the
+resulting trade-off across graphs with different size
+distributions.
+
+\subsection{Hierarchical decomposition algorithm}
+\label{sec:method_hierarchical}
+
+The bipartition QUBO formulation~\eqref{eq:qubo_k2} converges
+reliably and produces high-quality two-way splits, while the
+multi-class formulation~\eqref{eq:qubo_multi} suffers from the
+trivial collapse described in Section~\ref{sec:method_collapse_problem}
+and is sensitive to the choice of regularization. A natural way to
+exploit the strength of the bipartition formulation while still
+addressing problems with $k > 2$ communities is to apply the
+bipartition formulation \emph{recursively}: split the graph into
+two parts, then split each part again, and continue until further
+splitting no longer improves modularity.
+
+This idea is similar in spirit to the multi-level scheme of
+Louvain~\cite{blondel2008louvain}, which alternates between
+greedy modularity gain at the vertex level and aggregation into
+super-vertices, but the splitting step is performed by a neural
+QUBO solver rather than greedy local search. To the best of the
+author's knowledge, this combination has not been studied
+previously.
+
+\paragraph{Algorithm.}
+The proposed procedure is summarized in
+Algorithm~\ref{alg:hierarchical}. The input is a graph $G$, an
+optional target number of communities $k_{\max}$, and a minimum
+community size $n_{\min}$ below which a candidate community is
+not split further. A queue holds the current set of candidate
+subgraphs to be examined. Each candidate is split using the
+bipartition QIGNN of Section~\ref{sec:method_qubo_k2}, and the
+split is accepted if and only if it produces a positive modularity
+gain on the original graph. Accepted splits add two children to
+the queue; rejected splits or splits of subgraphs below $n_{\min}$
+finalize the current subgraph as a community.
+
+\begin{algorithm}[H]
+\caption{Hierarchical QIGNN}
+\label{alg:hierarchical}
+\begin{algorithmic}[1]
+\Require Graph $G = (V, E)$, target $k_{\max}$, minimum size $n_{\min}$
+\State $\Cscr \gets \emptyset$ \Comment{final communities}
+\State $Q \gets [V]$ \Comment{queue of candidate vertex sets}
+\While{$Q$ is non-empty \textbf{and} $|\Cscr| + |Q| < k_{\max}$}
+    \State $S \gets$ pop largest set from $Q$
+    \If{$|S| \le n_{\min}$}
+        \State $\Cscr \gets \Cscr \cup \{S\}$
+        \State \textbf{continue}
+    \EndIf
+    \State $(S_1, S_2) \gets \textsc{BipartitionQIGNN}(G[S])$
+    \State $\Delta M \gets M(\Cscr \cup \{S_1, S_2\} \cup Q) - M(\Cscr \cup \{S\} \cup Q)$
+    \If{$\Delta M > 0$}
+        \State $Q \gets Q \cup \{S_1, S_2\}$
+    \Else
+        \State $\Cscr \gets \Cscr \cup \{S\}$
+    \EndIf
+\EndWhile
+\State $\Cscr \gets \Cscr \cup Q$
+\State \Return $\Cscr$
+\end{algorithmic}
+\end{algorithm}
+
+\paragraph{Bipartition step.}
+The procedure $\textsc{BipartitionQIGNN}(G[S])$ applies the
+bipartition QIGNN of Section~\ref{sec:method_qubo_k2} to the
+induced subgraph $G[S]$. Several independent runs are performed
+with different random initializations and the run achieving the
+best discrete subgraph modularity is kept. The result is a
+partition of $S$ into two non-empty subsets $S_1$ and $S_2$.
+
+\paragraph{Stopping criterion.}
+A candidate split is accepted only when it strictly increases the
+modularity of the global partition. This is a direct adaptation of
+Newman's stopping rule for hierarchical modularity
+maximization~\cite{newman2006modularity}: a split that does not
+improve modularity at the global level is not retained, even if it
+locally separates the subgraph. The criterion automatically
+determines a suitable number of communities; the parameter
+$k_{\max}$ acts only as a safety bound and can be set to infinity
+when no upper limit is desired.
+
+\paragraph{Subgraph induction.}
+Each call to $\textsc{BipartitionQIGNN}$ operates on the induced
+subgraph $G[S]$, which preserves the internal connectivity of $S$
+but discards edges to the rest of the graph. The modularity matrix
+$\B$ is recomputed for $G[S]$ at each level, with degrees and the
+total edge count taken from the subgraph. The hierarchical
+procedure therefore optimizes the modularity of $G$ globally while
+performing only local QIGNN training at each step, which keeps
+the per-step cost low even when the graph is large.
+
+\paragraph{Properties.}
+The algorithm has three notable properties. First, the depth of
+the recursion is bounded by $\log_2 |V|$, and in practice it is
+much smaller because the modularity-gain criterion terminates
+recursion early on graphs whose true number of communities is
+moderate. Second, the algorithm produces an interpretable
+hierarchy of communities as a by-product, which is useful for
+exploratory analysis even when only the final flat partition is
+needed. Third, because every internal step uses the stable
+bipartition formulation~\eqref{eq:qubo_k2}, the overall
+procedure is empirically deterministic: in the experiments of
+Section~\ref{sec:exp_hierarchical}, the standard deviation of
+modularity across five random seeds is below $10^{-4}$ on ten of
+thirteen benchmarks~--~at the numerical noise floor~--~and at
+most $5\cdot10^{-3}$ on the remaining three.
+
+\newpage

@@ -1,0 +1,118 @@
+% =============================================================================
+% Bachelor's Thesis -- Higher School of Economics
+% Faculty of Computer Science
+% Programme: Data Science and Business Analytics (01.03.02)
+%
+% Title: Community Detection with Graph Neural Networks via QUBO formulation
+% =============================================================================
+
+\documentclass[12pt,a4paper]{article}
+
+% --- HSE Annex 7 formatting requirements ---
+\usepackage[left=25mm, right=10mm, top=20mm, bottom=20mm]{geometry}
+
+% Font: Times New Roman
+\usepackage{mathptmx}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+
+
+% Line spacing 1.5
+\usepackage{setspace}
+\onehalfspacing
+
+% Paragraph formatting
+\setlength{\parindent}{1.25cm}
+\setlength{\parskip}{0pt}
+\sloppy
+
+% Page numbering
+\usepackage{fancyhdr}
+\pagestyle{plain}
+
+% Math
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{mathtools}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+
+
+% Figures and tables
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{caption}
+\captionsetup[figure]{labelsep=endash, name=Figure, labelfont=normalfont}
+\captionsetup[table]{labelsep=endash, name=Table, labelfont=normalfont, justification=raggedright, singlelinecheck=false}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{multirow}
+
+% Code listings
+\usepackage{listings}
+\usepackage{xcolor}
+\lstdefinestyle{thesis_code}{
+    basicstyle=\ttfamily\fontsize{10}{12}\selectfont,
+    keywordstyle=\color{blue},
+    commentstyle=\color{gray},
+    stringstyle=\color{red!70!black},
+    breaklines=true,
+    showstringspaces=false,
+    frame=single,
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    aboveskip=10pt,
+    belowskip=10pt,
+}
+\lstset{style=thesis_code}
+
+% References [1], [2-3]
+\usepackage[numbers,sort&compress]{natbib}
+\bibliographystyle{unsrtnat}
+
+\usepackage[hidelinks]{hyperref}
+
+% Custom commands -- math notation
+\newcommand{\B}{\mathbf{B}}
+\newcommand{\Q}{\mathbf{Q}}
+\newcommand{\xb}{\mathbf{x}}
+\newcommand{\pb}{\mathbf{p}}
+\newcommand{\Pb}{\mathbf{P}}
+\newcommand{\Lcal}{\mathcal{L}}
+\newcommand{\Ncal}{\mathcal{N}}
+\newcommand{\svec}{\mathbf{s}}
+\newcommand{\Cscr}{\mathcal{C}}
+\newcommand{\yb}{\mathbf{y}}
+
+% =============================================================================
+\begin{document}
+
+\input{title_page}
+
+\setcounter{page}{2}
+
+\input{chapters/00_abstract}
+\newpage
+
+\tableofcontents
+\newpage
+
+\input{chapters/01_introduction}
+\newpage
+
+\input{chapters/02_related_work}
+\newpage
+
+\input{chapters/03_methodology}
+\newpage
+
+\input{chapters/04_experiments}
+\newpage
+
+\input{chapters/05_conclusion}
+\newpage
+
+\bibliography{references}
+\addcontentsline{toc}{section}{References}
+
+\end{document}

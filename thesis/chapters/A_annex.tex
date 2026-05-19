@@ -1,0 +1,38 @@
+% % =============================================================================
+% % Annexes (Appendices)
+% % =============================================================================
+
+% \section{Annex A: Equivalence of structured and matrix QUBO loss}
+% \label{annex:equivalence}
+
+% \textit{[TODO: 0.5--1 page. Brief proof that}
+% \textit{$\pb_{\mathrm{flat}}^T \Q \pb_{\mathrm{flat}} = -\frac{1}{2m}
+% \mathrm{tr}(\Pb^T \B \Pb) + P \| \Pb \mathbf{1}_k - \mathbf{1}_n \|_2^2$}
+% \textit{up to additive constants. This justifies using the
+% memory-efficient form (Section~\ref{sec:method_efficient}).}
+
+% \textit{Sketch of proof: expand $\Q$ as a sum of modular and
+% constraint contributions; show each maps directly to the corresponding
+% matrix-trace expression.}
+
+% \section{Annex B: Implementation details}
+% \label{annex:implementation}
+
+% \textit{[TODO (optional, 1--2 pages). Key code listings:}
+% \textit{\begin{itemize}
+%     \item \texttt{gen\_q\_dict\_modularity\_multi} -- the core
+%         QUBO matrix construction.
+%     \item \texttt{loss\_func\_multi\_v3} -- the training loss
+%         with structured computation and regularization.
+%     \item Key implementation note: the BatchNorm dimensionality
+%         bug encountered when adapting the original QIGNN
+%         architecture, where \texttt{nn.BatchNorm1d(in\_channels)}
+%         must be \texttt{nn.BatchNorm1d(out\_channels)} when the
+%         block changes dimensions.
+% \end{itemize}}
+
+% \section{Annex C: Extended results tables}
+% \label{annex:extended_results}
+
+% \textit{[TODO (optional). Per-shot raw results, full hyperparameter
+% sweep tables, etc.]}
