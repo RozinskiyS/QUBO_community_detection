@@ -44,27 +44,28 @@ tuning does not close the gap to Louvain on any benchmark; the
 gap is structural rather than calibration-related.
 
 \paragraph{The hierarchical algorithm recovers the multi-class
-case.} Recursive application of the bipartition formulation, with
-modularity gain as the stopping criterion, produces a method that
+case.} Recursive application of the bipartition formulation
+produces a method that, in its automatic modularity-gain mode,
 matches Louvain in modularity within $0.019$ on every benchmark
-in the study, including Email-EU-core
-($n = 986$, $k_{\mathrm{true}} = 42$). Taking the best of the
-three stopping criteria for each graph, the algorithm matches or
-exceeds Louvain in NMI on \textbf{ten of thirteen benchmarks}
-(eight strict wins and two ties at perfect NMI of $1.0$); the
-remaining three losses are all on LFR graphs with low mixing,
-where Louvain itself already attains NMI close to $1.0$. The
-largest NMI gains over Louvain are on imbalanced graphs:
-$+0.236$ on Polbooks-binary, $+0.094$ on Email-EU-core, and
-$+0.083$ on Karate. The algorithm is empirically deterministic,
-inheriting this property from the bipartition formulation: the
-standard deviation of modularity across random seeds is below
-$10^{-4}$ on ten of thirteen benchmarks and at most $0.005$ on
-the remaining three, two orders of magnitude lower than the
+in the study, including Email-EU-core ($n = 986$,
+$k_{\mathrm{true}} = 42$), and strictly exceeds Louvain in NMI
+on four benchmarks (Dolphins $+0.108$, Polbooks-binary $+0.082$,
+SBM-hard $+0.012$, Polblogs $+0.090$). An optional target-$k$
+mode that takes $k_{\mathrm{true}}$ as input trades a modularity
+gap on imbalanced graphs for higher NMI, matching or exceeding
+Louvain on \textbf{ten of thirteen benchmarks} (eight strict
+wins, including $+0.236$ on Polbooks-binary and $+0.094$ on
+Email-EU-core, and two ties at perfect NMI of $1.0$); the
+remaining three losses are on LFR graphs with low mixing, where
+Louvain itself already attains NMI close to $1.0$. The algorithm
+is empirically deterministic in both modes: the standard
+deviation of modularity across random seeds is below $10^{-4}$
+on ten of thirteen benchmarks and at most $0.005$ on the
+remaining three, two orders of magnitude lower than the
 multi-class formulation. The modularity-gain criterion
 automatically discovers the number of communities, recovering
-Louvain's choice of $k$ on graphs where Louvain's heuristic is
-itself reliable.
+Louvain's choice of $k$ on the real-world benchmarks and the
+ground-truth $k$ on the well-separated synthetic benchmarks.
 
 \medskip
 
@@ -174,11 +175,11 @@ applicable.
 \label{sec:final}
 
 The original question of this thesis was whether the QIGNN
-paradigm, validated on bipartite combinatorial problems such as
+paradigm, validated on two-class (single-bit-per-vertex) combinatorial problems such as
 MaxCut and Maximum Independent Set, could be effectively applied
 to the multi-class setting of community detection. The empirical
 answer is twofold. The direct multi-class formulation,
-constructed by the natural extension of the bipartite QUBO,
+constructed by the natural extension of the bipartition QUBO,
 exhibits structural limitations: trivial collapse, sensitivity
 to community balance, and a modularity gap to classical
 heuristics that hyperparameter tuning cannot close. The

@@ -53,12 +53,12 @@ framework~\cite{qignn2026} extends PI-GNN with iterative refinement:
 the prediction of one training epoch is concatenated with the input
 features of the next, allowing the network to revisit and improve
 its earlier output. Both PI-GNN and QIGNN have so far been validated
-on bipartite combinatorial problems --- MaxCut and Maximum
+on two-class (single-bit-per-vertex) combinatorial problems --- MaxCut and Maximum
 Independent Set --- where each variable is a single binary
 indicator.
 
-The community detection problem is bipartite only in the special
-case of two communities. With $k > 2$ communities each vertex must
+The community detection problem reduces to a single-bit-per-vertex
+formulation only in the special case of two communities. With $k > 2$ communities each vertex must
 be assigned a one-hot vector of length $k$, the QUBO matrix grows
 from $n \times n$ to $nk \times nk$, and the one-hot constraint
 needs to be enforced through a penalty term in the loss. Whether
@@ -137,11 +137,11 @@ memory-efficient training procedure is developed that computes the
 loss directly from the modularity matrix and the probability matrix
 without ever materializing the full $nk \times nk$ QUBO matrix.
 
-The multi-class loss has a degenerate global minimum at the trivial
+The multi-class loss has a wide local attractor at the trivial
 all-in-one assignment, where every vertex is placed into the same
 community. An orthogonality regularization adapted from
-DMoN~\cite{tsitsulin2020graph} is integrated to discourage this
-collapse by penalizing overlap between community columns. Its
+MinCutPool~\cite{bianchi2020spectral} is integrated to discourage
+this collapse by penalizing overlap between community columns. Its
 behavior is evaluated empirically on graphs with both balanced and
 imbalanced community structures.
 
@@ -166,21 +166,23 @@ following points.
     criterion. To the best of the author's knowledge, this is the
     first work to combine QUBO-based neural solvers with
     hierarchical graph decomposition for community detection. The
-    hierarchical method matches Louvain in modularity within $0.02$
-    on every benchmark in the study, including graphs with up to
-    forty-two ground-truth communities, while matching or exceeding
-    Louvain in normalized mutual information on ten of thirteen
-    benchmarks (eight strict wins plus two ties at the perfect
-    NMI of $1.0$). The modularity-gain stopping criterion
-    automatically discovers the number of communities, recovering
-    Louvain's choice of $k$ on graphs where Louvain's heuristic
-    is itself reliable.
+    hierarchical method, in its automatic modularity-gain mode,
+    matches Louvain in modularity within $0.02$ on every benchmark
+    in the study (including graphs with up to forty-two
+    ground-truth communities) and strictly exceeds Louvain in
+    normalized mutual information on four of them. An optional
+    target-$k$ mode that takes the ground-truth $k$ as input
+    trades a modularity gap on imbalanced graphs for higher NMI,
+    matching or exceeding Louvain on ten of thirteen benchmarks.
+    The modularity-gain criterion automatically discovers the
+    number of communities, recovering Louvain's choice of $k$
+    on graphs where Louvain's heuristic is itself reliable.
 
     \item \textbf{Extension of the QIGNN framework to multi-class
     community detection.} The QIGNN
     framework~\cite{qignn2026} and its predecessor
     PI-GNN~\cite{schuetz2022combinatorial} have so far been
-    validated only on bipartite problems such as MaxCut and Maximum
+    validated only on two-class problems such as MaxCut and Maximum
     Independent Set. To the best of the author's knowledge, this
     thesis is the first to apply the QIGNN paradigm to community
     detection with arbitrary $k$. The extension involves a softmax
@@ -206,7 +208,8 @@ following points.
 
     \item \textbf{Analysis of orthogonality regularization in the
     QUBO setting.} The orthogonality regularization originates in
-    the supervised DMoN method~\cite{tsitsulin2020graph}; its
+    the supervised MinCutPool method~\cite{bianchi2020spectral}
+    (and is also used by DMoN~\cite{tsitsulin2020graph}); its
     behavior in the unsupervised QUBO setting has not previously
     been studied. A systematic empirical comparison across diverse
     graph structures is provided, identifying when the

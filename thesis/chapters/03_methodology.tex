@@ -178,17 +178,21 @@ linearized into a single index
     \label{eq:linearization}
 \end{equation}
 giving a flat vector $\mathbf{y} \in \{0, 1\}^N$ with $N = nk$. The
-quadratic form $\mathbf{y}^T Q \mathbf{y}$ that reproduces~\eqref{eq:qubo_multi}
-has the following block structure. Diagonal entries $Q_{ii}$
-combine the modularity contribution $-B_{vv} / (2m)$ with the
-linear part of the constraint penalty $-P$. Off-diagonal entries
-fall into one of two categories: a \emph{modularity entry}
-$Q_{ij} = -B_{vw} / m$ when indices $i$ and $j$ correspond to
-different vertices but the same community, and a \emph{constraint
-entry} $Q_{ij} = 2P$ when indices $i$ and $j$ correspond to the
-same vertex but different communities. All remaining entries are
-zero. The resulting matrix has size $nk \times nk$ and is
-symmetric.
+quadratic form $\mathbf{y}^T Q \mathbf{y}$ that
+reproduces~\eqref{eq:qubo_multi} has the following block
+structure, given in the upper-triangular convention
+(Section~\ref{sec:method_qubo_general}). Diagonal entries
+$Q_{ii}$ combine the modularity contribution $-B_{vv} / (2m)$
+with the linear part of the constraint penalty $-P$. Off-diagonal
+entries $Q_{ij}$ with $i < j$ fall into one of two categories: a
+\emph{modularity entry} $Q_{ij} = -B_{vw} / m$ when indices
+correspond to different vertices but the same community, and a
+\emph{constraint entry} $Q_{ij} = 2P$ when indices correspond to
+the same vertex but different communities. All remaining entries
+are zero. The resulting matrix has size $nk \times nk$. (An
+equivalent symmetric storage halves these off-diagonal values and
+sets $Q_{ji} = Q_{ij}$; the implementation in this thesis uses
+the upper-triangular convention throughout.)
 
 \paragraph{Choice of $P$.}
 The penalty $P$ must be large enough to enforce the one-hot
@@ -276,8 +280,10 @@ takes the componentwise maximum.
 \label{sec:method_resblock}
 
 The basic building block of the QIGNN architecture is the
-\texttt{SAGEResBlock}, which combines two parallel GraphSAGE
-layers with different aggregators followed by a residual addition.
+\texttt{SAGEResBlock}, which sums two parallel GraphSAGE branches
+with different aggregators (the name follows the original QIGNN
+code; the block performs branch-sum aggregation rather than a
+classical identity-skip residual connection).
 Given an input representation $h$, the block computes
 \begin{equation}
     \mathrm{SAGEResBlock}(h) = \mathrm{LeakyReLU}\bigl(
@@ -320,7 +326,7 @@ on the QUBO formulation:
 \end{itemize}
 The replacement of the sigmoid head with a softmax over $k$ classes
 is one of the architectural adaptations made in this work; the
-original QIGNN architecture supports only bipartite outputs.
+original QIGNN architecture supports only single-bit-per-vertex outputs.
 
 
 \subsubsection{Iterative refinement}
@@ -443,7 +449,7 @@ relaxed solution toward the corners of the hypercube as training
 progresses~\cite{schuetz2022combinatorial}. The penalty is
 \begin{equation}
     \Lcal_{\mathrm{anneal}}(\theta, t) = \lambda(t) \sum_{i}
-    \left| p_i (1 - p_i) \right|,
+    p_i (1 - p_i),
     \label{eq:loss_anneal}
 \end{equation}
 where $p_i$ ranges over all entries of $\pb$ (or
@@ -511,15 +517,19 @@ cross-terms are lost.
 
 The structured form requires only the modularity matrix
 $\B \in \mathbb{R}^{n \times n}$ and the probability matrix
-$\Pb \in \mathbb{R}^{n \times k}$, with no need to materialize $\Q$.
-Memory complexity drops from $O(n^2 k^2)$ to $O(n^2 + nk)$, a
-factor-of-$k^2$ improvement when the modularity term dominates.
-For the Email-EU-core example ($k=42$), this is a reduction from
-approximately~$6.9$~GB to approximately~$4$~MB. Without this
-reformulation, training on graphs with $n \sim 10^3$ and
-$k \sim 10^2$ would not be feasible on commodity hardware. This
-memory-efficient implementation is one of the contributions of
-this thesis.
+$\Pb \in \mathbb{R}^{n \times k}$, with no need to materialize
+$\Q$. Memory complexity drops from $O(n^2 k^2)$ for the dense
+QUBO representation to $O(n^2 + nk)$ for the structured
+representation. A sparse implementation of $\Q$ would already
+reduce the cost to $O(n^2 k + n k^2)$ by exploiting the block
+structure; the structured form goes one factor further by
+treating the modularity and constraint terms separately, and is
+$k^2$ times smaller than the dense baseline when the modularity
+term dominates. For the Email-EU-core example ($k=42$), this is
+a reduction from approximately~$6.9$~GB (dense baseline) to
+approximately~$4$~MB. Without this reformulation, training on
+graphs with $n \sim 10^3$ and $k \sim 10^2$ would not be
+feasible on commodity hardware.
 
 
 \subsubsection{Output postprocessing}
@@ -545,32 +555,36 @@ materially.
 \subsubsection{Trivial collapse problem}
 \label{sec:method_collapse_problem}
 
-The multi-class QUBO loss~\eqref{eq:loss_qubo} has a degenerate
-global minimum corresponding to the trivial assignment in which
-every vertex is placed in the same community $c^*$, that is,
-$P_{v,c^*} = 1$ for all $v$ and $P_{v,c} = 0$ for all $c \neq c^*$.
-In this state the modularity contribution
+The multi-class QUBO loss~\eqref{eq:loss_qubo} has a wide and
+easily reachable local attractor corresponding to the trivial
+assignment in which every vertex is placed in the same community
+$c^*$, that is, $P_{v,c^*} = 1$ for all $v$ and $P_{v,c} = 0$ for
+all $c \neq c^*$. In this state the modularity contribution
 \begin{equation*}
     -\frac{1}{2m} \sum_{c=1}^{k} \sum_{v,w} B_{vw} P_{v,c} P_{w,c}
     = -\frac{1}{2m} \sum_{v,w} B_{vw}
 \end{equation*}
 vanishes by the row-sum property~\eqref{eq:B_row_sum}, and the
 constraint penalty also vanishes since $\sum_c P_{v,c} = 1$ for
-every vertex. The trivial assignment thus achieves a loss of zero
-without recovering any community structure. It is, moreover, a wide
-and easily reachable attractor in the loss landscape, requiring no
-coordinated agreement between vertices and reached as soon as the
-softmax outputs are biased toward any single community. Empirically
-the optimization converges to this attractor in a substantial
-fraction of training runs (Section~\ref{sec:exp_collapse}).
+every vertex. The trivial assignment thus achieves a loss of
+\emph{zero} --- which is \emph{worse} than any non-trivial valid
+assignment that has $M(C) > 0$, since the loss at a valid
+one-hot assignment equals $-M(C)$. The trivial state is therefore
+not a global minimum, but it is a wide attractor in the loss
+landscape: it requires no coordinated agreement between vertices
+and is reached as soon as the softmax outputs are biased toward
+any single community. Empirically the optimization converges to
+this attractor in a substantial fraction of training runs
+(Section~\ref{sec:exp_collapse}).
 
 
 \subsubsection{Orthogonality regularization}
 \label{sec:method_ortho}
 
 To discourage trivial collapse, an orthogonality regularization
-adapted from the supervised DMoN method~\cite{tsitsulin2020graph}
-is added to the multi-class loss:
+adapted from the supervised MinCutPool method~\cite{bianchi2020spectral}
+(also used in DMoN~\cite{tsitsulin2020graph}) is added to the
+multi-class loss:
 \begin{equation}
     \Lcal_{\mathrm{ortho}}(\Pb) = \left\| \frac{\Pb^T \Pb}{\| \Pb^T
     \Pb \|_F} - \frac{I_k}{\sqrt{k}} \right\|_F^2,
@@ -688,11 +702,15 @@ performing only local QIGNN training at each step, which keeps
 the per-step cost low even when the graph is large.
 
 \paragraph{Properties.}
-The algorithm has three notable properties. First, the depth of
-the recursion is bounded by $\log_2 |V|$, and in practice it is
-much smaller because the modularity-gain criterion terminates
+The algorithm has three notable properties. First, in the
+balanced-split case the depth of the recursion is
+$\Theta(\log_2 k)$ where $k$ is the final number of communities,
+while the worst case (pathologically unbalanced splits) is
+$O(|V|)$. In practice the modularity-gain criterion terminates
 recursion early on graphs whose true number of communities is
-moderate. Second, the algorithm produces an interpretable
+moderate, and the observed maximum depth in the experiments of
+Section~\ref{sec:exp_hierarchical} never exceeds five (attained
+on Email-EU-core). Second, the algorithm produces an interpretable
 hierarchy of communities as a by-product, which is useful for
 exploratory analysis even when only the final flat partition is
 needed. Third, because every internal step uses the stable

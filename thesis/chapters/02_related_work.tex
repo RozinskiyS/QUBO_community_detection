@@ -71,9 +71,12 @@ Infomap~\cite{rosvall2008infomap}, which finds communities by
 minimizing the description length of a random walk on the graph.
 Stochastic block models~\cite{karrer2011stochastic} take a generative
 view of the problem and recover communities through statistical
-inference. The thesis uses Louvain and Leiden as the primary
-baselines because they share the modularity objective with the
-proposed method, making the comparison meaningful.
+inference. The thesis uses Louvain as the primary baseline
+because it shares the modularity objective with the proposed
+method, making the comparison meaningful; Leiden is reported
+alongside Louvain in the dataset-level baseline table
+(Section~\ref{sec:exp_baselines_metrics}) as a sanity check and
+behaves within a few thousandths of Louvain on every benchmark.
 
 % -----------------------------------------------------------------------------
 \subsection{QUBO formulations and hardware solvers}
@@ -176,12 +179,14 @@ node features (typically derived from labeled data) but is
 unsupervised in its training signal: only the modularity-based loss
 is used, with no community labels.
 
-The contribution of DMoN that is particularly relevant for this
-thesis is the orthogonality regularization
-$\bigl\| \Pb^T \Pb / \| \Pb^T \Pb \|_F - I_k / \sqrt{k} \bigr\|_F^2$,
-which Tsitsulin et al.\ introduce to prevent degenerate cluster
-assignments. The same regularization is adopted in
-Section~\ref{sec:method_ortho} of this thesis, although in the
+DMoN includes an orthogonality regularization that penalizes
+overlap between community assignments. The specific orthogonality
+formula
+$\bigl\| \Pb^T \Pb / \| \Pb^T \Pb \|_F - I_k / \sqrt{k} \bigr\|_F^2$
+adopted in Section~\ref{sec:method_ortho} of this thesis is the
+form introduced by MinCutPool~\cite{bianchi2020spectral} and also
+used by DMoN; both papers report it as effective against
+degenerate cluster assignments. This thesis applies it in the
 rather different setting of an unsupervised QUBO loss.
 
 A related supervised method is MinCutPool by Bianchi et
@@ -232,7 +237,7 @@ the same MaxCut and MIS benchmarks as PI-GNN and reports improved
 stability and final solution quality.
 
 QIGNN is the architectural starting point of this thesis. The
-existing validation of QIGNN is restricted to bipartite
+existing validation of QIGNN is restricted to two-class
 combinatorial problems, where each variable is a single binary
 indicator; the present thesis is, to the best of the author's
 knowledge, the first work to apply the QIGNN paradigm to a
@@ -251,7 +256,7 @@ general approach, but it does highlight the importance of careful
 empirical evaluation against strong classical baselines, rather than
 adoption of neural QUBO solvers based on a small set of benchmark
 results. The empirical evaluation in this thesis follows this
-guidance by including Louvain and Leiden as primary baselines on a
+guidance by including Louvain as the primary baseline (with Leiden as a sanity-check secondary baseline) on a
 diverse collection of graphs.
 
 % -----------------------------------------------------------------------------

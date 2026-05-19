@@ -62,8 +62,11 @@ controlled benchmarks of community size, balance, and contrast.
 \subsubsection{Baselines, metrics, and hyperparameters}
 \label{sec:exp_baselines_metrics}
 
-The primary baselines are Louvain~\cite{blondel2008louvain} and
-Leiden~\cite{traag2019leiden}, both modularity maximizers. Three
+The primary baseline is Louvain~\cite{blondel2008louvain};
+Leiden~\cite{traag2019leiden} is reported as a sanity-check
+secondary baseline (its modularity on the seven main multi-class
+graphs differs from Louvain's by at most $0.006$, and it is
+therefore not duplicated in every comparison table). Three
 metrics are used: \emph{modularity}~\eqref{eq:modularity},
 \emph{normalized mutual information}
 (NMI)~\cite{mcdaid2011normalized} with the ground-truth partition,
@@ -78,9 +81,10 @@ PyTorch~2.2 and DGL~2.2. Training used Adam at learning
 rate~$0.014$ with hidden dimension~$50$, dropout~$0.5$, a
 maximum of~$3\,000$ epochs, and early stopping after~$1\,000$
 epochs of stagnation in the relaxed QUBO loss. Multistart used
-twenty runs for graphs with $n \le 200$ and ten runs for larger
-graphs. The constraint penalty for the multi-class formulation
-was set to $P = 1.5 \cdot \max_{v,w} |B_{vw}|$.
+twenty runs per graph except on Polblogs and Email-EU-core,
+where ten runs were used to limit total wall time. The
+constraint penalty for the multi-class formulation was set to
+$P = 1.5 \cdot \max_{v,w} |B_{vw}|$.
 
 % -----------------------------------------------------------------------------
 \subsection{Bipartition formulation}
@@ -178,26 +182,32 @@ that hyperparameter tuning does not eliminate.
 \label{sec:exp_collapse_rate}
 
 A run is classified as collapsed if the final assignment places
-at least $80\%$ of vertices into a single community. The
-unregularized multi-class formulation collapses on most
-benchmarks, with rates ranging from $10\%$ on LFR-$\mu$0.1 to
-$85\%$ on Karate ($k = k_{\mathrm{true}}$; twenty shots per
-graph). The collapse rates across configurations are summarized
-in Figure~\ref{fig:collapse_heatmap}.
+at least $80\%$ of vertices into a single community. In the
+extended-shots experiment (twenty shots per graph, $k =
+k_{\mathrm{true}}$), the unregularized multi-class formulation
+collapses on most benchmarks, with rates ranging from $10\%$ on
+LFR-$\mu$0.1 to $85\%$ on Karate.
+Figure~\ref{fig:collapse_heatmap} reports the same collapse
+metric on the earlier regularization-comparison experiment (five
+shots per graph, $k$ set to a representative value above
+$k_{\mathrm{true}}$); the smaller shot count yields broader
+extremes (e.g., $100\%$ on Karate at $k=5$), but the relative
+ordering of the strategies is the same.
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=\textwidth]{figures/fig4_compare_collapse_heatmap.png}
     \caption{Trivial-collapse rate across seven benchmarks under
     the unregularized multi-class formulation versus the same
-    with orthogonality regularization. The third column shows a
-    collapse-only regularization considered during exploratory
-    work; it suppresses collapse but did not improve modularity
-    on any benchmark and is not adopted in the final method.
-    Orthogonality regularization suppresses collapse to zero on
-    the multi-class benchmarks; a residual rate remains on
-    benchmarks with $k_{\mathrm{true}}=2$, for which the
-    multi-class formulation is itself degenerate.}
+    with orthogonality regularization (five shots per graph). The
+    third column shows a collapse-only regularization considered
+    during exploratory work; it suppresses collapse but did not
+    improve modularity on any benchmark and is not adopted in the
+    final method. Orthogonality regularization suppresses
+    collapse to zero on five of the seven benchmarks, leaving a
+    residual rate of $0.20$ on Football ($k=12$) and $0.60$ on
+    Karate ($k=5$); these residual cases are eliminated entirely
+    at larger $\alpha$.}
     \label{fig:collapse_heatmap}
 \end{figure}
 
@@ -301,7 +311,7 @@ evaluated on the seven main benchmarks
 
 \begin{table}[H]
     \caption{Multi-class formulation with orthogonality
-    regularization ($\alpha = 1.0$, twenty shots, ten on
+    regularization ($\alpha = 0.1$, twenty shots, ten on
     Email-EU-core). \emph{Improvement} columns give the change
     relative to the unregularized baseline.}
     \label{tab:ortho_crossgraph}
@@ -428,19 +438,23 @@ is at most $0.019$ on every benchmark (the maximum is attained
 on Polbooks). On three benchmarks the hierarchical algorithm
 strictly exceeds Louvain in modularity: Karate ($+0.013$),
 SBM-hard ($+0.016$), and Dolphins ($+0.0002$, a near-tie).
-Second, taking the best result across the three stopping
-criteria (which is the natural way to use the hierarchical
-algorithm as a method), the algorithm matches or exceeds Louvain
-in NMI on \textbf{ten of thirteen benchmarks}: eight strict wins
-(Karate, Dolphins, Polbooks-binary, Polbooks, Football,
-Polblogs, Email-EU-core, SBM-hard) and two ties at the perfect
-NMI of $1.0$ (SBM-easy and SBM-large). The remaining three
-losses are all LFR benchmarks with low mixing parameter
-($\mu \le 0.3$), where Louvain's NMI is already at or near $1.0$
-and the gap to it is at most $0.058$. The largest NMI gains over
-Louvain occur on imbalanced graphs and use the target-$k$
-criterion: $+0.236$ on Polbooks-binary, $+0.094$ on Email-EU-core,
-and $+0.083$ on Karate. Third, the Email-EU-core benchmark is
+Second, under the fully automatic modularity-gain criterion the
+algorithm strictly exceeds Louvain in NMI on four benchmarks
+(Dolphins $+0.108$, Polbooks-binary $+0.082$, Polblogs $+0.090$,
+SBM-hard $+0.012$) and ties on the two well-separated SBM
+variants at perfect NMI of $1.0$. Selecting per graph the best
+of the three stopping criteria (with target-$k$ supplied as
+input on graphs where it is used) extends the count to
+\textbf{ten of thirteen benchmarks} (eight strict wins plus the
+two ties), with the largest gains on imbalanced graphs:
+$+0.236$ on Polbooks-binary, $+0.094$ on Email-EU-core, and
+$+0.083$ on Karate. The remaining three losses are all LFR
+benchmarks with low mixing ($\mu \le 0.3$), where Louvain's NMI
+is already at or near $1.0$ and the gap is at most $0.058$. The
+SBM-hard ``win'' should be read with care: both methods reach
+NMI close to random ($0.06$ versus $0.04$), reflecting weak
+ground-truth structure at $p_{\mathrm{in}} = 0.2$,
+$p_{\mathrm{out}} = 0.15$. Third, the Email-EU-core benchmark is
 particularly informative: on a graph with $986$ vertices and
 $42$ ground-truth departments the hierarchical algorithm
 reaches modularity $0.408$, within $0.003$ of Louvain's $0.411$,
@@ -473,13 +487,19 @@ Figure~\ref{fig:hier_criteria} compares the three criteria.
 \end{figure}
 
 The modularity-gain criterion automatically discovers the
-number of communities. On graphs with up to twelve ground-truth
-communities (Football and below), it recovers
-$k_{\mathrm{true}}$ exactly. On Email-EU-core, where
-$k_{\mathrm{true}} = 42$, the criterion stops at $k=8$, which
-coincides with Louvain's own choice; this is not a failure of
-the criterion but a property of the modularity objective on
-this graph, where finer partitions reduce modularity.
+number of communities. On the synthetic benchmarks with
+well-separated structure (LFR-$\mu$0.1, LFR-$\mu$0.3, LFR-large,
+SBM-easy, SBM-large) and on Polblogs, the criterion recovers
+$k_{\mathrm{true}}$ exactly. On the remaining real-world
+benchmarks the criterion stops at a value that coincides with
+Louvain's own choice rather than with $k_{\mathrm{true}}$
+(Karate $k = 4$, Dolphins $k = 5$, Polbooks $k = 5$, Football
+$k = 10$, Email-EU-core $k = 8$). This is not a failure of the
+criterion but a property of the modularity objective on these
+graphs: finer partitions reduce modularity even when finer
+ground-truth structure exists. The classical resolution
+limit~\cite{fortunato2007resolution} of modularity is the
+underlying reason.
 
 The target-$k$ criterion forces the algorithm to continue
 splitting until exactly $k_{\mathrm{true}}$ communities are

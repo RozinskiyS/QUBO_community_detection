@@ -19,7 +19,7 @@ inaccessible to most practitioners.
 This thesis develops a software-based alternative to hardware QUBO
 solvers for community detection. The starting point is the QIGNN
 framework~\cite{qignn2026}~--~an unsupervised graph neural network
-originally validated on bipartite combinatorial problems such as
+originally validated on two-class (single-bit-per-vertex) combinatorial problems such as
 MaxCut and Maximum Independent Set. The QIGNN paradigm is extended
 to the multi-class setting of community detection, combining the
 QUBO formulations of modularity maximization due to Wang et
@@ -30,7 +30,7 @@ The QIGNN architecture is adapted to the multi-class community
 assignment task through a softmax output layer over $k$ classes and
 the linearization of the QUBO problem required for handling one-hot
 encoded variables. An orthogonality regularization adapted
-from~\cite{tsitsulin2020graph} is integrated to control the
+from~\cite{bianchi2020spectral} is integrated to control the
 trivial-collapse failure mode of the multi-class loss landscape, and
 its behaviour is analyzed across graph structures of varying
 balance. A memory-efficient training procedure is developed that
@@ -41,23 +41,27 @@ $k^{2}$ in the number of communities, making training feasible on
 graphs that would otherwise be out of reach.
 
 The bipartition formulation of the proposed method converges
-deterministically on the binary benchmarks considered and reaches
-normalized mutual information at or above Louvain's on the majority
-of them. Where the direct multi-class formulation runs into
-difficulties, a hierarchical extension is proposed that recursively
-applies the bipartition formulation. This hierarchical algorithm
-matches Louvain in modularity within $0.02$ on every benchmark
-tested (up to $42$ ground-truth communities) and matches or
-exceeds Louvain in normalized mutual information on ten of
-thirteen benchmarks, while inheriting the empirical determinism of
-the bipartition formulation. The applicability regime of each
-formulation is analyzed in terms of problem size, community
-balance, and number of classes.
+near-deterministically on the binary benchmarks considered and
+reaches normalized mutual information at or above Louvain's on
+the majority of them. Where the direct multi-class formulation
+runs into difficulties, a hierarchical extension is proposed that
+recursively applies the bipartition formulation. The hierarchical
+algorithm exposes two operating modes with different trade-offs:
+the fully automatic modularity-gain mode matches Louvain in
+modularity within $0.02$ on every benchmark tested (up to $42$
+ground-truth communities) and exceeds Louvain in NMI on four of
+them; the target-$k$ mode (which requires the number of
+communities as input) trades a modularity gap on imbalanced
+graphs for higher NMI, matching or exceeding Louvain on ten of
+thirteen benchmarks. The algorithm inherits the empirical
+determinism of the bipartition formulation across both modes.
+The applicability regime of each formulation is analyzed in
+terms of problem size, community balance, and number of classes.
 
 Together, these results establish QIGNN-based community detection
-as a viable GPU-only alternative to hardware QUBO solvers,
-competitive with classical heuristics across both binary and
-multi-class settings.
+as a viable commodity-hardware alternative to hardware QUBO
+solvers, competitive with classical heuristics across both binary
+and multi-class settings.
 
 \bigskip
 
